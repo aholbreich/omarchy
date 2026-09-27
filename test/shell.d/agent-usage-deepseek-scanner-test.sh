@@ -96,9 +96,19 @@ pass "DeepSeek collector counts opencode messages on a DeepSeek provider"
   fail "DeepSeek collector keeps reasoning with output and cache apart in opencode" "$result"
 pass "DeepSeek collector keeps reasoning with output and cache apart in opencode"
 
+# A day active in both pi and opencode is still one active day.
+mkdir -p "$OPENCODE_HOME/.pi/agent/sessions/project"
+cp "$PI_HOME/.pi/agent/sessions/project/pi.jsonl" "$OPENCODE_HOME/.pi/agent/sessions/project/"
+result=$(HOME="$OPENCODE_HOME" XDG_DATA_HOME="$OPENCODE_HOME/.local/share" \
+  "$ROOT/bin/omarchy-agent-usage-deepseek" 2>/dev/null)
+
+[[ $(jq -r '"\(.todayTotalTokens):\(.totalSessions):\(.activeDays)"' <<<"$result") == "176:2:1" ]] ||
+  fail "DeepSeek collector counts a day shared by pi and opencode once" "$result"
+pass "DeepSeek collector counts a day shared by pi and opencode once"
+
 # ---------------------------------------------------------------- balance
 
-result=$(python3 - "$ROOT/bin/omarchy-agent-usage-deepseek" "$TEST_HOME/.config" <<'PY'
+result=$(HOME="$TEST_HOME" XDG_DATA_HOME="$TEST_HOME/.local/share" python3 - "$ROOT/bin/omarchy-agent-usage-deepseek" "$TEST_HOME/.config" <<'PY'
 import importlib.machinery
 import importlib.util
 import json
@@ -132,10 +142,13 @@ summary = {"withConfig": balance}
 scanner.fetch_balance = lambda base_url, key: (_ for _ in ()).throw(
   scanner.DeepSeekError("balance endpoint unavailable")
 )
-import contextlib
-import io
-with contextlib.redirect_stderr(io.StringIO()):
-  summary["onFailure"] = scanner.balance_record("test-key", "https://example.invalid")
+scanner.api_key = lambda: "test-key"
+record = scanner.scan("https://example.invalid")
+summary["onFailure"] = {
+  "hasBalance": "balance" in record,
+  "status": record["usageStatusText"],
+  "help": record["authHelpText"],
+}
 scanner.fetch_balance = real_fetch_balance
 
 # The real request must carry the bearer key and hit /user/balance.
@@ -188,9 +201,9 @@ PY
   fail "DeepSeek collector derives the estimated ledger from fundedAmount" "$result"
 pass "DeepSeek collector derives the estimated ledger from fundedAmount"
 
-[[ $(jq -r '.onFailure' <<<"$result") == "null" ]] ||
-  fail "DeepSeek collector omits the balance when the endpoint fails" "$result"
-pass "DeepSeek collector omits the balance when the endpoint fails"
+[[ $(jq -c '.onFailure' <<<"$result") == '{"hasBalance":false,"status":"Balance unavailable","help":"balance endpoint unavailable"}' ]] ||
+  fail "DeepSeek collector reports a failed balance lookup in the record" "$result"
+pass "DeepSeek collector reports a failed balance lookup in the record"
 
 [[ $(jq -c '.liveShape' <<<"$result") == '{"remaining":42.5,"granted":2.5,"toppedUp":40.0,"currency":"CNY"}' ]] ||
   fail "DeepSeek collector parses the live balance response" "$result"
