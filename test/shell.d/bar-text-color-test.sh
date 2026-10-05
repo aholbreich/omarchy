@@ -64,3 +64,33 @@ result=$(HOME="$TMPDIR" LIMIT_LOG="$TMPDIR/limits" TIMEOUT_LOG="$TMPDIR/timeout"
 [[ $(<"$TMPDIR/limits") == $'256MiB\t0\t0\t5\t2' ]] || fail "wallpaper sampling bounds ImageMagick resources" "$(<"$TMPDIR/limits")"
 [[ $(<"$TMPDIR/timeout") == $'--kill-after=1s\t5s\tmagick' ]] || fail "wallpaper sampling has a hard timeout" "$(<"$TMPDIR/timeout")"
 pass "transparent bar wallpaper sampling is resource bounded"
+
+# An existing wallpaper whose bounded sample fails (ImageMagick refuses it at a
+# resource limit) or runs out of time must keep the configured text color, even
+# on a light wallpaper where a finished sample would switch it.
+failing_bin="$TMPDIR/failing-bin"
+mkdir -p "$failing_bin"
+cat >"$failing_bin/magick" <<'SH'
+#!/bin/bash
+echo "magick: cache resources exhausted" >&2
+exit 1
+SH
+chmod +x "$failing_bin/magick"
+
+result=$(HOME="$TMPDIR" PATH="$failing_bin:$PATH" \
+  omarchy-bar-text-color top 20 '#ffffff' '#101010' --background "$light_top" --screen 100x100)
+[[ $result == "#ffffff" ]] || fail "failed wallpaper sample falls back to text color" "expected #ffffff, got $result"
+pass "failed wallpaper sample falls back to text color"
+
+expired_bin="$TMPDIR/expired-bin"
+mkdir -p "$expired_bin"
+cat >"$expired_bin/timeout" <<'SH'
+#!/bin/bash
+exit 124
+SH
+chmod +x "$expired_bin/timeout"
+
+result=$(HOME="$TMPDIR" PATH="$expired_bin:$PATH" \
+  omarchy-bar-text-color top 20 '#ffffff' '#101010' --background "$light_top" --screen 100x100)
+[[ $result == "#ffffff" ]] || fail "timed-out wallpaper sample falls back to text color" "expected #ffffff, got $result"
+pass "timed-out wallpaper sample falls back to text color"
