@@ -54,16 +54,28 @@ cat >"$bounded_bin/magick" <<'SH'
 #!/bin/bash
 printf '%s\t%s\t%s\t%s\t%s\n' \
   "$MAGICK_MEMORY_LIMIT" "$MAGICK_MAP_LIMIT" "$MAGICK_DISK_LIMIT" "$MAGICK_TIME_LIMIT" "$MAGICK_THREAD_LIMIT" >"$LIMIT_LOG"
+printf '%s\n' "$*" >"$ARGS_LOG"
 printf '245,245,245'
 SH
 chmod +x "$bounded_bin/timeout" "$bounded_bin/magick"
 
-result=$(HOME="$TMPDIR" LIMIT_LOG="$TMPDIR/limits" TIMEOUT_LOG="$TMPDIR/timeout" PATH="$bounded_bin:$PATH" \
+result=$(HOME="$TMPDIR" LIMIT_LOG="$TMPDIR/limits" TIMEOUT_LOG="$TMPDIR/timeout" ARGS_LOG="$TMPDIR/args" PATH="$bounded_bin:$PATH" \
   omarchy-bar-text-color top 20 '#ffffff' '#101010' --background "$light_top" --screen 100x100)
 [[ $result == "#101010" ]] || fail "bounded wallpaper sample still chooses the contrasting color" "expected #101010, got $result"
-[[ $(<"$TMPDIR/limits") == $'256MiB\t0\t0\t5\t2' ]] || fail "wallpaper sampling bounds ImageMagick resources" "$(<"$TMPDIR/limits")"
+[[ $(<"$TMPDIR/limits") == $'512MiB\t0\t0\t5\t2' ]] || fail "wallpaper sampling bounds ImageMagick resources" "$(<"$TMPDIR/limits")"
 [[ $(<"$TMPDIR/timeout") == $'--kill-after=1s\t5s\tmagick' ]] || fail "wallpaper sampling has a hard timeout" "$(<"$TMPDIR/timeout")"
 pass "transparent bar wallpaper sampling is resource bounded"
+
+# Only the bar strip's mean color is needed, so a high-resolution screen is sampled
+# on a canvas at most 1920 px wide, and JPEG decodes at about that size. Otherwise
+# a 6K or 8K wallpaper exceeds the pixel-cache limit and silently falls back.
+HOME="$TMPDIR" LIMIT_LOG="$TMPDIR/limits" TIMEOUT_LOG="$TMPDIR/timeout" ARGS_LOG="$TMPDIR/args" PATH="$bounded_bin:$PATH" \
+  omarchy-bar-text-color bottom 64 '#ffffff' '#101010' --background "$light_top" --screen 6016x3384 >/dev/null
+args=$(<"$TMPDIR/args")
+[[ $args == "-define jpeg:size=1920x1080 "* ]] || fail "high-resolution screen decodes JPEG at canvas size" "$args"
+[[ $args == *" -sample 1920x1080^ "* && $args == *" -crop 1920x21+0+1059 "* ]] ||
+  fail "high-resolution screen samples a scaled canvas" "$args"
+pass "high-resolution screen samples a scaled canvas"
 
 # An existing wallpaper whose bounded sample fails (ImageMagick refuses it at a
 # resource limit) or runs out of time must keep the configured text color, even
