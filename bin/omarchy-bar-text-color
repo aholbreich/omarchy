@@ -120,17 +120,19 @@ esac
 # Sample the first frame only. Without the selector a video background makes
 # ImageMagick decode the whole file and emit one value per frame, and the match
 # below then fails into the fallback colour. Let JPEG decode at about canvas size
-# and point-sample to the canvas, so a 6K or 8K photo fits the limit without a
-# second full-size resize buffer; the bar strip is averaged to one pixel anyway. Do not let an oversized image spill its pixel
-# cache into a memory map or /tmp (a tmpfs on Omarchy); fall back to the configured
-# text color when the bounded sample cannot finish cheaply.
+# and box-scale to the canvas, so a 6K or 8K photo fits the limit without a
+# second full-size resize buffer. Box scaling still averages every source pixel;
+# point sampling would alias on fine stripes and pick the wrong text color. Do
+# not let an oversized image spill its pixel cache into a memory map or /tmp (a
+# tmpfs on Omarchy); fall back to the configured text color when the bounded
+# sample cannot finish cheaply.
 pixel=$(MAGICK_MEMORY_LIMIT=512MiB \
   MAGICK_MAP_LIMIT=0 \
   MAGICK_DISK_LIMIT=0 \
   MAGICK_TIME_LIMIT=5 \
   MAGICK_THREAD_LIMIT=2 \
   timeout --kill-after=1s 5s magick -define jpeg:size="${screen_width}x${screen_height}" "$background_path[0]" -auto-orient \
-  -sample "${screen_width}x${screen_height}^" \
+  -scale "${screen_width}x${screen_height}^" \
   -gravity center -extent "${screen_width}x${screen_height}" \
   -gravity NorthWest -crop "$crop" +repage \
   -resize '1x1!' -format '%[fx:int(255*r)],%[fx:int(255*g)],%[fx:int(255*b)]' info:- 2>/dev/null || true)
