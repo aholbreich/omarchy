@@ -24,6 +24,8 @@ case "$*" in
   "status server --json")
     if [[ ${HERDR_SERVER:-} == "none" ]]; then
       echo '{"status":"stopped","running":false}'
+    elif [[ ${HERDR_SERVER:-} == "wedged" ]]; then
+      exec sleep 60
     else
       printf '{"status":"running","running":true,"version":"%s"}\n' "${HERDR_SERVER:-0.9.3}"
     fi
@@ -51,6 +53,14 @@ pass "a current Herdr server gets no notice"
 output=$(HERDR_CLIENT=0.9.3 HERDR_SERVER=none services)
 if grep -q 'Herdr' <<<"$output"; then fail "no notice without a running Herdr server" "$output"; fi
 pass "no notice without a running Herdr server"
+
+started=$SECONDS
+output=$(HERDR_CLIENT=0.9.3 HERDR_SERVER=wedged services) ||
+  fail "the service phase succeeds when the Herdr server does not answer" "$output"
+(( SECONDS - started < 10 )) ||
+  fail "a Herdr server that does not answer does not hold up the update" "took $((SECONDS - started))s"
+if grep -q 'Herdr' <<<"$output"; then fail "no notice when the Herdr server does not answer" "$output"; fi
+pass "a Herdr server that does not answer does not hold up the update"
 
 # Without Herdr the check is skipped, even if a herdr elsewhere on PATH would answer.
 printf '#!/bin/bash\n[[ $1 != "herdr" ]]\n' >"$tmp_dir/bin/omarchy-cmd-present"
