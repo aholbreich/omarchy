@@ -32,12 +32,13 @@ pass "transparent bar text falls back to text color when sampling fails"
 
 # Fine detail must be averaged, not point-sampled. On a quarter-white stripe
 # pattern at four times screen size, point sampling lands on the white stripes
-# and switches a dark bar to the background color.
+# and keeps dark text on a dark bar. The dark text color is also the fallback, so
+# only a finished, averaged sample switches to the light background color.
 dark_stripes="$TMPDIR/dark-stripes.png"
 magick -size 4x1 xc:black -fill white -draw 'point 1,0' "$TMPDIR/stripe.png"
 magick -size 400x100 tile:"$TMPDIR/stripe.png" "$dark_stripes"
 
-result=$(HOME="$TMPDIR" omarchy-bar-text-color top 10 '#ffffff' '#101010' --background "$dark_stripes" --screen 100x25)
+result=$(HOME="$TMPDIR" omarchy-bar-text-color top 10 '#101010' '#ffffff' --background "$dark_stripes" --screen 100x25)
 [[ $result == "#ffffff" ]] || fail "transparent bar text averages fine wallpaper detail" "expected #ffffff, got $result"
 pass "transparent bar text averages fine wallpaper detail"
 
