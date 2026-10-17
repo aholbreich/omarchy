@@ -95,6 +95,7 @@ Panel {
   property string actionKind: ""  // "connect" | "disconnect" | "forget"
   property string failureSsid: ""
   property string failureReason: ""
+  property string failureKind: ""  // the actionKind that failed
   property string passwordSsid: ""
   property string passwordText: ""
   property string identityText: ""
@@ -836,6 +837,7 @@ Panel {
     if (!network || actionKind === "" || actionSsid !== (network.name || "")) return
     actionTimeout.stop()
     failureSsid = actionSsid
+    failureKind = actionKind
     failureReason = networkFailureReason(reason, requiresCredentials(network.security))
     actionSsid = ""
     actionKind = ""
@@ -854,8 +856,9 @@ Panel {
     if (!network) return
     // NetworkManager can autoconnect a network after a panel connect to it
     // failed. No action is in flight then, so drop the failure here or the row
-    // keeps it over "Connected" until the next click.
-    if (network.connected && failureReason !== "" && failureSsid === (network.name || "")) {
+    // keeps it over "Connected" until the next click. Only a failed connect:
+    // a timed-out disconnect or forget leaves the network connected.
+    if (network.connected && failureKind === "connect" && failureReason !== "" && failureSsid === (network.name || "")) {
       failureSsid = ""
       failureReason = ""
     }
@@ -1075,6 +1078,7 @@ Panel {
       else if (root.actionKind === "disconnect") reason = "Timed out disconnecting"
       else reason = "Timed out forgetting"
       root.failureSsid = root.actionSsid
+      root.failureKind = root.actionKind
       root.failureReason = reason
       root.actionSsid = ""
       root.actionKind = ""

@@ -330,6 +330,7 @@ assertEqual(network.headerDetail({ type: 'ethernet', speed: '100' }), '100mbit',
   var passwordSsid = ''
   var failureSsid = ''
   var failureReason = ''
+  var failureKind = ''
   var actionTimeout = { stop() {}, restart() {} }
   var refresh = () => {}
   var requiresCredentials = () => true
@@ -354,5 +355,15 @@ assertEqual(network.headerDetail({ type: 'ethernet', speed: '100' }), '100mbit',
   assertEqual(failureReason, '', 'network drops a failure once NetworkManager connects that network on its own')
   assertEqual(failureSsid, '', 'network forgets which network failed once it connects')
   assertEqual(actionKind, '', 'network starts no action while clearing a recovered failure')
+
+  // A timed-out disconnect leaves the network connected, and refresh() runs
+  // checkActionCompletion straight away, so only a failed connect may clear.
+  const timeout = panelSource.match(/id: actionTimeout[\s\S]*?\n {2}\}/)
+  assert(timeout && /root\.failureKind = root\.actionKind/.test(timeout[0]), 'network records which action timed out')
+  failureSsid = 'Home'
+  failureReason = 'Timed out disconnecting'
+  failureKind = 'disconnect'
+  checkActionCompletion(home)
+  assertEqual(failureReason, 'Timed out disconnecting', 'network keeps a timed-out disconnect on a network that is still connected')
 })()
 JS
